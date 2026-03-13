@@ -1,68 +1,56 @@
 import streamlit as st
 import os
-from dotenv import load_dotenv
 from ssh_client import SSHManager
+from openai import OpenAI
 
-# 1. Versuche erst die Cloud-Secrets, dann die lokale .env
-if "SSH_HOST" in st.secrets:
-    # Wir sind in der Cloud
+# 1. Passwort-Schutz
+def check_password():
+    def password_entered():
+        if st.session_state["password"] == st.secrets["APP_PASSWORD"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+    if "password_correct" not in st.session_state:
+        st.text_input("Bitte Admin-Passwort eingeben", type="password", on_change=password_entered, key="password")
+        return False
+    return True
+
+if check_password():
+    # Daten aus Secrets
     ssh_host = st.secrets["SSH_HOST"]
     ssh_user = st.secrets["SSH_USER"]
     ssh_pass = st.secrets["SSH_PASS"]
-    # Falls du OpenAI nutzt:
-    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
-else:
-    # Wir sind lokal auf deinem Mac
-    load_dotenv()
-    ssh_host = os.getenv("SSH_HOST")
-    ssh_user = os.getenv("SSH_USER")
-    ssh_pass = os.getenv("SSH_PASS")
+    api_key = st.secrets["OPENAI_API_KEY"]
 
-ssh = SSHManager(ssh_host, ssh_user, ssh_pass)
+    client = OpenAI(api_key=api_key)
+    ssh = SSHManager(ssh_host, ssh_user, ssh_pass)
 
-# Hauptbereich
-st.title("🚀 FlowCode Agent")
-st.subheader("Dein intelligenter n8n & Docker Admin")
+    st.title("🚀 FlowCode | KI-Admin")
 
-# Status-Check (Ampel)
-try:
-    ssh.connect()
-    st.success(f"🟢 Verbunden mit {h}")
-    ssh.close()
-except:
-    st.error("🔴 Verbindung fehlgeschlagen. Prüfe deine Daten in der Sidebar.")
-
-# KI-Eingabe
-if 'history' not in st.session_state:
-    st.session_state.history = []
-
-user_wunsch = st.text_input("Was soll ich auf dem Server erledigen?", placeholder="z.B. Prüfe ob n8n läuft")
-
-if user_wunsch:
-    with st.spinner("KI analysiert..."):
-        prompt = f"User will: {user_wunsch}. Erkläre kurz auf Deutsch, was du tust, und gib dann den Linux-Befehl aus. Trenne beides mit einem '|'. Format: Erklärung | Befehl"
-        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}])
-        ki_res = response.choices[0].message.content
+    try:
+        ssh.connect()
+        st.success("Server Status: Online 🟢")
         
-        parts = ki_res.split("|")
-        erlaeuterung = parts[0].strip()
-        befehl = parts[1].strip() if len(parts) > 1 else ""
-
-        st.warning(f"**Plan:** {erlaeuterung}")
-        if befehl:
-            st.code(befehl, language="bash")
-            if st.button("Befehl jetzt ausführen"):
-                ssh.connect()
-                output = ssh.execute(befehl)
-                st.session_state.history.append({"cmd": befehl, "res": output})
-                st.success("Erledigt!")
-                st.code(output)
-                ssh.close()
-
-# Verlauf
-if st.session_state.history:
-    st.divider()
-    st.write("### 🕒 Verlauf")
-    for item in reversed(st.session_state.history):
-        with st.expander(f"Befehl: {item['cmd']}"):
-            st.code(item['res'])
+        user_input = st.text_input("Was soll ich auf dem Server tun?", placeholder="z.B. Zeig mir alle Dateien oder CPU Last")
+        
+        if user_input:
+            with st.spinner("KI denkt nach..."):
+                # KI entscheidet, welcher Linux-Befehl nötig ist
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "Du bist ein Server-Experte. Antworte NUR mit dem passenden Linux-Befehl, ohne Text drumherum."},
+                        {"role": "user", "content": user_input}
+                    ]
+                )
+                linux_command = response.choices[0].message.content.strip()
+                
+                st.code(f"Ausführung: {linux_command}", language="bash")
+                
+                # Befehl auf Server ausführen
+                result = ssh.execute_command(linux_command)
+                st.text_area("Server Ergebnis:", value=result, height=200)
+                
+    except Exception as e:
+        st.error(f"Verbindungsfehler: {e}")
