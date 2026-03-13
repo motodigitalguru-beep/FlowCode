@@ -3,60 +3,45 @@ import os
 from ssh_client import SSHManager
 from openai import OpenAI
 
-# 1. Passwort-Schutz Logik
+# 1. Passwort-Schutz
 def check_password():
-    def password_entered():
-        if st.session_state["password"] == st.secrets["APP_PASSWORD"]:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
-
     if "password_correct" not in st.session_state:
-        st.text_input("Bitte Admin-Passwort eingeben", type="password", on_change=password_entered, key="password")
-        return False
-    elif not st.session_state["password_correct"]:
-        st.text_input("Bitte Admin-Passwort eingeben", type="password", on_change=password_entered, key="password")
-        st.error("😕 Passwort falsch.")
+        st.text_input("Bitte Admin-Passwort eingeben", type="password", key="password_input")
+        if st.session_state.password_input == st.secrets["APP_PASSWORD"]:
+            st.session_state["password_correct"] = True
+            st.rerun()
         return False
     return True
 
-# 2. Wenn Passwort korrekt, zeige App
 if check_password():
-    # Daten aus Secrets laden
-    ssh_host = st.secrets["SSH_HOST"]
-    ssh_user = st.secrets["SSH_USER"]
-    ssh_pass = st.secrets["SSH_PASS"]
-    api_key = st.secrets["OPENAI_API_KEY"]
+    # Verbindung herstellen
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    ssh = SSHManager(st.secrets["SSH_HOST"], st.secrets["SSH_USER"], st.secrets["SSH_PASS"])
 
-    client = OpenAI(api_key=api_key)
-    ssh = SSHManager(ssh_host, ssh_user, ssh_pass)
-
-    st.title("🚀 FlowCode | Admin-Dashboard")
+    st.title("🚀 FlowCode Admin")
 
     try:
         ssh.connect()
-        st.success("Server Status: Online 🟢")
+        st.success("Verbunden! 🟢")
         
-        # WICHTIG: Hier heißt die Variable jetzt 'user_query'
-        user_query = st.text_input("KI-Agent: Welchen Befehl soll ich ausführen?")
+        # HIER IST DIE WICHTIGE STELLE:
+        befehl_text = st.text_input("Was soll ich tun?")
         
-        if user_query:
-            with st.spinner("KI denkt nach..."):
-                # Die KI entscheidet, welcher Befehl nötig ist
+        if befehl_text:
+            with st.spinner("KI arbeitet..."):
+                # KI nach dem Linux-Befehl fragen
                 response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[
-                        {"role": "system", "content": "Du bist ein Linux-Experte. Antworte NUR mit dem exakten Bash-Befehl, ohne Text drumherum."},
-                        {"role": "user", "content": user_query}
+                        {"role": "system", "content": "Antworte NUR mit dem Linux-Befehl."},
+                        {"role": "user", "content": befehl_text}
                     ]
                 )
-                linux_command = response.choices[0].message.content.strip()
+                kommando = response.choices[0].message.content.strip()
                 
-                # Befehl anzeigen und ausführen
-                st.code(f"Ausführung: {linux_command}", language="bash")
-                result = ssh.execute_command(linux_command)
-                st.text_area("Server Antwort:", value=result, height=300)
+                st.code(f"Befehl: {kommando}")
+                ergebnis = ssh.execute_command(kommando)
+                st.text_area("Antwort vom Server:", value=ergebnis, height=200)
                 
     except Exception as e:
         st.error(f"Fehler: {e}")
