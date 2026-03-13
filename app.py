@@ -2,7 +2,7 @@ import streamlit as st
 import paramiko
 from openai import OpenAI
 
-# SSH Manager Klasse direkt im Code
+# SSH Manager Klasse
 class SSHManager:
     def __init__(self, host, user, password):
         self.host, self.user, self.password = host, user, password
@@ -17,10 +17,12 @@ class SSHManager:
 
 st.title("🚀 FlowCode Agent")
 
-# Initialisierung der Clients
-if "OPENAI_API_KEY" in st.secrets:
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Sicherheitscheck: Sind die Secrets da?
+if "SSH_HOST" not in st.secrets:
+    st.error("Warten auf Secrets... Bitte Seite im Browser neu laden.")
+    st.stop()
 
+# Ab hier läuft die App
 if "authenticated" not in st.session_state:
     eingabe = st.text_input("Passwort", type="password")
     if st.button("Login"):
@@ -30,19 +32,19 @@ if "authenticated" not in st.session_state:
 else:
     try:
         ssh = SSHManager(st.secrets["SSH_HOST"], st.secrets["SSH_USER"], st.secrets["SSH_PASS"])
+        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
         ssh.connect()
         st.success("Verbunden! 🟢")
         
-        user_wunsch = st.text_input("Was soll ich auf dem Server tun?")
+        user_wunsch = st.text_input("Was soll ich tun?")
         if user_wunsch:
-            with st.spinner("KI analysiert..."):
-                response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[{"role": "system", "content": "Antworte NUR mit dem Linux-Befehl."},
-                              {"role": "user", "content": user_wunsch}]
-                )
-                cmd = response.choices[0].message.content.strip()
-                st.code(f"Befehl: {cmd}")
-                st.text_area("Server Antwort:", value=ssh.execute_command(cmd))
+            res = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "system", "content": "Nur Linux-Befehl antworten."},
+                          {"role": "user", "content": user_wunsch}]
+            )
+            cmd = res.choices[0].message.content.strip()
+            st.code(f"Befehl: {cmd}")
+            st.text_area("Antwort:", value=ssh.execute_command(cmd))
     except Exception as e:
         st.error(f"Fehler: {e}")
