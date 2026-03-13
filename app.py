@@ -1,14 +1,11 @@
+import streamlit as st
+import paramiko
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
-import streamlit as st
 
-# Diese Zeile zwingt das Programm, die .env Datei zu laden
-load_dotenv(override=True) 
-
-# Jetzt ziehen wir die Daten sicher raus
-ssh_host = os.getenv("SSH_HOST")
-openai_key = os.getenv("OPENAI_API_KEY")
+# Lädt die Daten aus deiner .env Datei vom Server
+load_dotenv()
 
 # SSH Manager Klasse
 class SSHManager:
@@ -25,34 +22,42 @@ class SSHManager:
 
 st.title("🚀 FlowCode Agent")
 
-# Sicherheitscheck: Sind die Secrets da?
-if "SSH_HOST" not in st.secrets:
-    st.error("Warten auf Secrets... Bitte Seite im Browser neu laden.")
-    st.stop()
+# Daten-Quelle: Erst .env, dann Streamlit Secrets
+ssh_host = os.getenv("SSH_HOST") or st.secrets.get("SSH_HOST")
+ssh_user = os.getenv("SSH_USER") or st.secrets.get("SSH_USER")
+ssh_pass = os.getenv("SSH_PASS") or st.secrets.get("SSH_PASS")
+openai_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
+app_pw = os.getenv("APP_PASSWORD") or st.secrets.get("APP_PASSWORD")
 
-# Ab hier läuft die App
+# OpenAI Client initialisieren
+if openai_key:
+    client = OpenAI(api_key=openai_key)
+
+# App Logik
 if "authenticated" not in st.session_state:
-    eingabe = st.text_input("Passwort", type="password")
+    eingabe = st.text_input("Admin Passwort", type="password")
     if st.button("Login"):
-        if eingabe == st.secrets["APP_PASSWORD"]:
+        if eingabe == app_pw:
             st.session_state["authenticated"] = True
             st.rerun()
+        else:
+            st.error("Passwort falsch!")
 else:
     try:
-        ssh = SSHManager(st.secrets["SSH_HOST"], st.secrets["SSH_USER"], st.secrets["SSH_PASS"])
-        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+        ssh = SSHManager(ssh_host, ssh_user, ssh_pass)
         ssh.connect()
-        st.success("Verbunden! 🟢")
+        st.success(f"Verbunden mit {ssh_host} 🟢")
         
-        user_wunsch = st.text_input("Was soll ich tun?")
-        if user_wunsch:
-            res = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "system", "content": "Nur Linux-Befehl antworten."},
-                          {"role": "user", "content": user_wunsch}]
-            )
-            cmd = res.choices[0].message.content.strip()
-            st.code(f"Befehl: {cmd}")
-            st.text_area("Antwort:", value=ssh.execute_command(cmd))
+        wunsch = st.text_input("Was soll ich auf dem Server tun?")
+        if wunsch:
+            with st.spinner("KI übersetzt..."):
+                res = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "system", "content": "Antworte NUR mit dem Linux-Befehl."},
+                              {"role": "user", "content": wunsch}]
+                )
+                cmd = res.choices[0].message.content.strip()
+                st.code(f"Befehl: {cmd}")
+                st.text_area("Antwort:", value=ssh.execute_command(cmd))
     except Exception as e:
         st.error(f"Fehler: {e}")
