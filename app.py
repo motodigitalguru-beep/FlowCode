@@ -1,6 +1,13 @@
+import os
+from dotenv import load_dotenv
 import streamlit as st
-import paramiko
-from openai import OpenAI
+
+# Diese Zeile zwingt das Programm, die .env Datei zu laden
+load_dotenv(override=True) 
+
+# Jetzt ziehen wir die Daten sicher raus
+ssh_host = os.getenv("SSH_HOST")
+openai_key = os.getenv("OPENAI_API_KEY")
 
 # SSH Manager Klasse
 class SSHManager:
