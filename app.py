@@ -1,47 +1,40 @@
 import streamlit as st
-import os
 from ssh_client import SSHManager
 from openai import OpenAI
 
-# 1. Passwort-Schutz
-def check_password():
-    if "password_correct" not in st.session_state:
-        st.text_input("Bitte Admin-Passwort eingeben", type="password", key="password_input")
-        if st.session_state.password_input == st.secrets["APP_PASSWORD"]:
-            st.session_state["password_correct"] = True
+st.title("🚀 FlowCode Admin")
+
+# 1. Prüfen ob Secrets da sind
+if "APP_PASSWORD" not in st.secrets:
+    st.error("Fehler: APP_PASSWORD wurde in den Secrets nicht gefunden!")
+else:
+    # 2. Passwort-Abfrage
+    if "auth" not in st.session_state:
+        pw = st.text_input("Admin-Passwort", type="password")
+        if pw == st.secrets["APP_PASSWORD"]:
+            st.session_state["auth"] = True
             st.rerun()
-        return False
-    return True
-
-if check_password():
-    # Verbindung herstellen
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    ssh = SSHManager(st.secrets["SSH_HOST"], st.secrets["SSH_USER"], st.secrets["SSH_PASS"])
-
-    st.title("🚀 FlowCode Admin")
-
-    try:
-        ssh.connect()
-        st.success("Verbunden! 🟢")
-        
-        # HIER IST DIE WICHTIGE STELLE:
-        befehl_text = st.text_input("Was soll ich tun?")
-        
-        if befehl_text:
-            with st.spinner("KI arbeitet..."):
-                # KI nach dem Linux-Befehl fragen
-                response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "Antworte NUR mit dem Linux-Befehl."},
-                        {"role": "user", "content": befehl_text}
-                    ]
-                )
-                kommando = response.choices[0].message.content.strip()
-                
-                st.code(f"Befehl: {kommando}")
-                ergebnis = ssh.execute_command(kommando)
-                st.text_area("Antwort vom Server:", value=ergebnis, height=200)
-                
-    except Exception as e:
-        st.error(f"Fehler: {e}")
+    else:
+        # 3. Wenn eingeloggt, zeige die App
+        try:
+            ssh = SSHManager(st.secrets["SSH_HOST"], st.secrets["SSH_USER"], st.secrets["SSH_PASS"])
+            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+            
+            ssh.connect()
+            st.success("Verbunden mit Server 🟢")
+            
+            frage = st.text_input("Was soll ich tun?")
+            if frage:
+                with st.spinner("KI denkt nach..."):
+                    res = client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[{"role": "system", "content": "Antworte NUR mit dem Linux-Befehl."},
+                                  {"role": "user", "content": frage}]
+                    )
+                    cmd = res.choices[0].message.content.strip()
+                    st.code(f"Befehl: {cmd}")
+                    out = ssh.execute_command(cmd)
+                    st.text_area("Server-Antwort:", value=out, height=200)
+                    
+        except Exception as e:
+            st.error(f"Verbindung fehlgeschlagen: {e}")
