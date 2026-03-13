@@ -2,25 +2,23 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 from ssh_client import SSHManager
-from openai import OpenAI
 
-# Setup
-load_dotenv()
-st.set_page_config(page_title="FlowCode AI", layout="wide", page_icon="🚀")
+# 1. Versuche erst die Cloud-Secrets, dann die lokale .env
+if "SSH_HOST" in st.secrets:
+    # Wir sind in der Cloud
+    ssh_host = st.secrets["SSH_HOST"]
+    ssh_user = st.secrets["SSH_USER"]
+    ssh_pass = st.secrets["SSH_PASS"]
+    # Falls du OpenAI nutzt:
+    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+else:
+    # Wir sind lokal auf deinem Mac
+    load_dotenv()
+    ssh_host = os.getenv("SSH_HOST")
+    ssh_user = os.getenv("SSH_USER")
+    ssh_pass = os.getenv("SSH_PASS")
 
-# Initialisierung OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# Sidebar: Das Kunden-Interface
-st.sidebar.header("🔑 Server-Zugang")
-with st.sidebar:
-    h = st.text_input("Host IP", value=os.getenv("SSH_HOST"))
-    u = st.text_input("User", value=os.getenv("SSH_USER"))
-    p = st.text_input("Passwort", type="password", value=os.getenv("SSH_PASS"))
-    st.divider()
-    st.info("Diese Daten werden nur lokal für diese Session genutzt.")
-
-ssh = SSHManager(h, u, p)
+ssh = SSHManager(ssh_host, ssh_user, ssh_pass)
 
 # Hauptbereich
 st.title("🚀 FlowCode Agent")
