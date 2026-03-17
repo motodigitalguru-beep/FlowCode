@@ -53,20 +53,22 @@ with st.sidebar:
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    # CPU Last berechnen (100 - idle)
+    # CPU: Bleibt wie sie ist, da sie auf Bild 20 bereits funktioniert (0%)
     cpu_val = run_ssh("top -bn1 | grep 'Cpu(s)' | awk '{print 100 - $8}'")
     st.metric("CPU Last", f"{cpu_val}%" if cpu_val else "0%")
 
 with col2:
-    # RAM (Used in MB)
-    mem_val = run_ssh("free -m | awk '/Mem:/ { print $3 }'")
+    # RAM: Wir nehmen nur den ersten Wert (Used)
+    # Filtert alles außer der reinen Zahl für den verbrauchten RAM heraus
+    mem_val = run_ssh("free -m | awk '/Mem:/ { print $3 }' | head -n 1")
     st.metric("RAM (Used)", f"{mem_val} MB" if mem_val else "0 MB")
 
 with col3:
-    # Disk Usage Hauptpartition
-    disk_val = run_ssh("df -h / | awk 'NR==2 {print $5}'")
+    # Disk: Wir nehmen nur die Prozentzahl (z.B. 10%)
+    # Nutzt awk, um nur die Spalte mit der Prozentangabe auszugeben
+    disk_val = run_ssh("df -h / | awk 'NR==2 {print $5}' | head -n 1")
     st.metric("Disk Usage", disk_val if disk_val else "0%")
-
+    
 st.write("---")
 
 # 5. Dateieditor
