@@ -53,7 +53,7 @@ if prompt := st.chat_input("Was soll ich auf dem Server tun?"):
             try:
                 # KI-Anfrage an Groq (Llama 3 Modell)
                 res = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile", # Ein schnelles Groq Modell
+                    model="llama3-8b-8192", # Ein schnelles Groq Modell
                     messages=[
                         {"role": "system", "content": "Antworte NUR mit dem Linux-Befehl."},
                         {"role": "user", "content": prompt}
