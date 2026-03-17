@@ -57,20 +57,18 @@ with col3:
 
 st.write("---")
 
-# 5. KORRIGIERT: Robusterer Media Viewer
-with st.expander("🖼️ Clawbot Image Galerie", expanded=True):
-    # Holt alle .png, .jpg, .jpeg (case-insensitive) aus dem Ordner
-    # Wir nutzen find, da es toleranter ist als ls
-    cmd_find = "find /root/clawbot/images -type f \\( -iname \"*.png\" -o -iname \"*.jpg\" -o -iname \"*.jpeg\" \\)"
-    img_list_raw = run_ssh(cmd_find)
+# 5. KORRIGIERT: Robusterer Media Viewerst.write("---")
+
+# 5. VERBESSERT: Robuste Media Gallery & Viewer
+with st.expander("🖼️ Clawbot Image Galerie (Verbessert)", expanded=True):
+    # Nutzen find statt ls, da find toleranter ist (case-insensitive)
+    # Sucht PNG, JPG, JPEG, egal ob groß oder klein geschrieben
+    img_list_raw = run_ssh("find /root/clawbot/images -maxdepth 1 -type f \\( -iname \"*.png\" -o -iname \"*.jpg\" -o -iname \"*.jpeg\" \\) 2>/dev/null")
     
     if img_list_raw:
-        img_list = img_list_raw.split('\n')
-        # Bereinigt leere Einträge
-        img_list = [f for f in img_list if f.strip()]
-        
-        # Dropdown zur Auswahl
-        selected_img = st.selectbox("Wähle ein generiertes Bild:", img_list)
+        # Erstellt die Liste und filtert leere Zeilen
+        img_list = [f for f in img_list_raw.split('\n') if f.strip()]
+        selected_img = st.selectbox("Wähle ein Bild aus:", img_list)
         
         if st.button("Bild laden & anzeigen"):
             try:
@@ -92,7 +90,7 @@ with st.expander("🖼️ Clawbot Image Galerie", expanded=True):
             except Exception as e:
                 st.error(f"Fehler beim Laden des Bildes: {e}")
     else:
-        st.info("Keine Bilder (.png, .jpg) im Ordner /root/clawbot/images gefunden.")
+        st.info("Keine Bilder (.png, .jpg) im Ordner /root/clawbot/images gefunden. Prüfe die Pfade.")
 
 st.write("---")
 
