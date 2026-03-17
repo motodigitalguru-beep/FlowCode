@@ -43,8 +43,7 @@ if prompt := st.chat_input("Was soll ich auf dem Server tun?"):
                 res = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[
-                        {"role": "system", "content": "Antworte NUR mit dem Linux-Befehl."},
-                        {"role": "user", "content": prompt}
+                        {"role": "system", "content": "Antworte NUR mit dem Linux-Befehl. Leite Fehlermeldungen mit 2>/dev/null um."},
                     ]
                 )
                 cmd = res.choices[0].message.content.strip().replace('```bash', '').replace('```', '')
