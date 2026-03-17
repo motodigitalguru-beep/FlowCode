@@ -57,7 +57,8 @@ if prompt := st.chat_input("Was soll ich auf dem Server tun?"):
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                     ssh.connect(ssh_host, username=ssh_user, password=ssh_pass)
                     
-                    stdin, stdout, stderr = ssh.exec_command(cmd)
+                    stdin, stdout, stderr = ssh.exec_command(f"bash -l -c '{cmd}'")
+                                                             
                     out = stdout.read().decode()
                     err = stderr.read().decode()
                     
