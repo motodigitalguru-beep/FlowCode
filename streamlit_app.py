@@ -1,59 +1,47 @@
 import streamlit as st
 import paramiko
 from groq import Groq
-# import os # dotenv wird in der Cloud nicht benötigt, da wir Secrets nutzen
-# from dotenv import load_dotenv
-
-# load_dotenv() # Nicht für die Cloud
 
 st.set_page_config(page_title="FlowCode Agent", page_icon="🤖")
 st.title("🤖 FlowCode Server Agent")
 
-# Sidebar für Login-Daten
-with st.sidebar:
-    st.header("⚙️ Login")
-    # Platzhalter für IP und Keys - die musst du dann in der Sidebar eingeben!
-    ssh_host = st.text_input("Server IP", value="0.0.0.0") # Beispiel IP
-    ssh_user = st.text_input("Benutzer", value="root")
-    ssh_pass = st.text_input("SSH Passwort", type="password")
-    
-    # Platzhalter für den Groq Key - auch in der Sidebar einzugeben!
-    groq_key = st.text_input("Groq API Key", type="password", placeholder="gsk_...")
+# 1. Daten aus den Secrets laden
+# Wir versuchen die Daten aus den Secrets zu ziehen. 
+# Falls sie nicht da sind, bleiben die Variablen leer.
+groq_key = st.secrets.get("GROQ_API_KEY", "")
+ssh_host = st.secrets.get("SSH_HOST", "187.124.28.197")
+ssh_user = st.secrets.get("SSH_USER", "root")
+ssh_pass = st.secrets.get("SSH_PASS", "")
 
-# --- NEU & WICHTIG: Client-Initialisierung sichern ---
+# 2. Client Initialisierung
 client = None
 if groq_key:
-    # Der Client wird NUR erstellt, wenn ein Key eingetippt wurde
     client = Groq(api_key=groq_key)
 
+# Chat-Historie im Session State
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Chat-Verlauf anzeigen
+# Verlauf anzeigen
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Eingabe-Logik
+# 3. Eingabe-Logik
 if prompt := st.chat_input("Was soll ich auf dem Server tun?"):
-    # Prüfen, ob wir überhaupt bereit sind
-    if not client:
-        st.error("❌ Fehler: Bitte gib zuerst den Groq API Key in der Sidebar ein!")
-    elif not ssh_pass:
-        st.error("❌ Fehler: Bitte gib zuerst das SSH-Passwort in der Sidebar ein!")
-    elif ssh_host == "0.0.0.0":
-        st.error("❌ Fehler: Bitte gib zuerst deine korrekte Server IP in der Sidebar ein!")
+    # Prüfung: Sind alle Daten da (entweder aus Secrets oder Sidebar)?
+    if not groq_key or not ssh_pass:
+        st.error("❌ Fehler: Keys oder SSH-Passwort fehlen in den Streamlit Secrets!")
     else:
-        # Alles bereit, Befehl verarbeiten
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.spinner("Groq denkt nach..."):
             try:
-                # KI-Anfrage an Groq (Llama 3 Modell)
+                # Hier nutzen wir das AKTUELLSTE Modell
                 res = client.chat.completions.create(
-                    model="llama3-8b-8192", # Ein schnelles Groq Modell
+                    model="llama-3.3-70b-versatile",
                     messages=[
                         {"role": "system", "content": "Antworte NUR mit dem Linux-Befehl."},
                         {"role": "user", "content": prompt}
@@ -64,17 +52,15 @@ if prompt := st.chat_input("Was soll ich auf dem Server tun?"):
                 with st.chat_message("assistant"):
                     st.info(f"Führe aus: `{cmd}`")
                     
-                    # SSH Verbindung aufbauen
+                    # SSH Verbindung
                     ssh = paramiko.SSHClient()
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                     ssh.connect(ssh_host, username=ssh_user, password=ssh_pass)
                     
-                    # Befehl auf dem Server ausführen
                     stdin, stdout, stderr = ssh.exec_command(cmd)
                     out = stdout.read().decode()
                     err = stderr.read().decode()
                     
-                    # Ergebnisse im Chat anzeigen
                     if out: st.code(out)
                     if err: st.error(err)
                     ssh.close()
