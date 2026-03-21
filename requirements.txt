@@ -1,4 +1,5 @@
 streamlit
-openai
 paramiko
+groq
+openai
 python-dotenv
