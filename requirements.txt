@@ -1,4 +1,0 @@
-streamlit
-openai
-paramiko
-python-dotenv
